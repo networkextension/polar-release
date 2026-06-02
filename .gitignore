@@ -1,0 +1,4 @@
+/release-svc
+/release-publish
+*.env
+*.test
