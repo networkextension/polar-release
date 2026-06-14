@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Signer wraps an ed25519 private key + exposes the public half.
@@ -80,4 +81,48 @@ func VerifyManifest(pubHex, sigHex string, m Manifest) bool {
 		return false
 	}
 	return ed25519.Verify(ed25519.PublicKey(pub), m.canonicalBytes(), sig)
+}
+
+// ApproverSet is the allowlist of ed25519 PUBLIC keys (hex) trusted to
+// stamp promotions — the approver trust anchor, distinct from the release
+// signing key. Loaded from POLAR_RELEASE_APPROVER_KEYS (comma-separated
+// hex pubkeys). A human approver and an AI reviewer each contribute a
+// pubkey here; either can sign a valid stamp.
+type ApproverSet struct{ keys []ed25519.PublicKey }
+
+// NewApproverSet parses a comma-separated list of hex ed25519 pubkeys.
+// Malformed entries are skipped (logged by the caller via Len()).
+func NewApproverSet(csv string) *ApproverSet {
+	set := &ApproverSet{}
+	for _, h := range strings.Split(csv, ",") {
+		h = strings.TrimSpace(h)
+		if h == "" {
+			continue
+		}
+		b, err := hex.DecodeString(h)
+		if err != nil || len(b) != ed25519.PublicKeySize {
+			continue
+		}
+		set.keys = append(set.keys, ed25519.PublicKey(b))
+	}
+	return set
+}
+
+// Len is the number of trusted approver keys.
+func (s *ApproverSet) Len() int { return len(s.keys) }
+
+// Verify reports whether sigHex over att.canonicalBytes() validates
+// against ANY allowlisted approver key.
+func (s *ApproverSet) Verify(sigHex string, att Attestation) bool {
+	sig, err := hex.DecodeString(sigHex)
+	if err != nil {
+		return false
+	}
+	msg := att.canonicalBytes()
+	for _, k := range s.keys {
+		if ed25519.Verify(k, msg, sig) {
+			return true
+		}
+	}
+	return false
 }
