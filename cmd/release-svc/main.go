@@ -41,8 +41,9 @@ func main() {
 		PluginName:  envOr("POLAR_PLUGIN_NAME", "release"),
 		PluginToken: strings.TrimSpace(os.Getenv("POLAR_PLUGIN_TOKEN")),
 		Listen:      envOr("POLAR_RELEASE_LISTEN", "127.0.0.1:8101"),
-		Version:     envOr("POLAR_RELEASE_VERSION", "0.0.1"),
-		SigningSeed: strings.TrimSpace(os.Getenv("POLAR_RELEASE_SIGNING_KEY")),
+		Version:      envOr("POLAR_RELEASE_VERSION", "0.0.1"),
+		SigningSeed:  strings.TrimSpace(os.Getenv("POLAR_RELEASE_SIGNING_KEY")),
+		ApproverKeys: strings.TrimSpace(os.Getenv("POLAR_RELEASE_APPROVER_KEYS")),
 	}
 	if cfg.PluginToken == "" {
 		log.Fatal("POLAR_PLUGIN_TOKEN unset — mint one for the 'release' plugin in dock /admin-plugins.html")

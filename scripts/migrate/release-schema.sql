@@ -28,3 +28,41 @@ CREATE TABLE IF NOT EXISTS releases (
 CREATE INDEX IF NOT EXISTS idx_releases_resolve
     ON releases (module, channel, platform, published_at DESC)
     WHERE yanked_at IS NULL;
+
+-- P2 promotion gate (doc/arch/zone-federation-platform.md §3): a version
+-- must pass the stage zone (stage_runs) AND carry a signed stamp
+-- (promotion_attestations) before promote into beta/stable. Channels:
+-- dev (publish entry) → stage (test) → beta → stable.
+CREATE TABLE IF NOT EXISTS stage_runs (
+    id            BIGSERIAL PRIMARY KEY,
+    module        TEXT NOT NULL,
+    version       TEXT NOT NULL,
+    platform      TEXT NOT NULL,
+    passed        BOOLEAN NOT NULL,
+    migrations_ok BOOLEAN NOT NULL DEFAULT FALSE,
+    destructive   BOOLEAN NOT NULL DEFAULT FALSE,
+    backup_ref    TEXT NOT NULL DEFAULT '',
+    result        JSONB NOT NULL DEFAULT '{}',
+    result_sha256 TEXT NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_stage_runs_lookup
+    ON stage_runs (module, version, platform, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS promotion_attestations (
+    id            BIGSERIAL PRIMARY KEY,
+    module        TEXT NOT NULL,
+    version       TEXT NOT NULL,
+    platform      TEXT NOT NULL,
+    from_channel  TEXT NOT NULL,
+    to_channel    TEXT NOT NULL,
+    stage_run_id  BIGINT NOT NULL REFERENCES stage_runs(id),
+    result_sha256 TEXT NOT NULL,
+    approver      TEXT NOT NULL,
+    approver_kind TEXT NOT NULL,                   -- human | ai
+    signature     TEXT NOT NULL,                   -- ed25519 hex over attestation canonical
+    approved_at   TEXT NOT NULL,                   -- exact signed RFC3339 string
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_attestations_lookup
+    ON promotion_attestations (module, version, platform, to_channel, created_at DESC);

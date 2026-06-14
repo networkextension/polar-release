@@ -29,9 +29,10 @@ type Config struct {
 	DockBase    string
 	PluginName  string
 	PluginToken string
-	Listen      string
-	Version     string
-	SigningSeed string // hex of ed25519 seed; empty → ephemeral + warn
+	Listen       string
+	Version      string
+	SigningSeed  string // hex of ed25519 seed; empty → ephemeral + warn
+	ApproverKeys string // comma-sep hex ed25519 PUBLIC keys trusted to stamp promotions
 }
 
 // Plugin holds the running service state.
@@ -39,6 +40,7 @@ type Plugin struct {
 	DB        *sql.DB
 	Dock      *sdk.Client
 	Signer    *Signer
+	Approvers *ApproverSet
 	Name      string
 	Listen    string
 	Ver       string
@@ -82,6 +84,13 @@ func New(ctx context.Context, cfg Config) (*Plugin, error) {
 		log.Printf("release: signing key loaded, pubkey=%s", signer.PublicKeyHex())
 	}
 
+	approvers := NewApproverSet(cfg.ApproverKeys)
+	if approvers.Len() == 0 {
+		log.Printf("release: WARNING no POLAR_RELEASE_APPROVER_KEYS — promotions into beta/stable will be refused until an approver pubkey is configured")
+	} else {
+		log.Printf("release: %d approver key(s) loaded (promotion stamps)", approvers.Len())
+	}
+
 	dock := sdk.NewClient(cfg.DockBase, cfg.PluginName, sdk.DeriveHMACKey(cfg.PluginToken))
 	resp, err := dock.Do(http.MethodGet, "/internal/v1/ping", nil)
 	if err != nil {
@@ -91,7 +100,7 @@ func New(ctx context.Context, cfg Config) (*Plugin, error) {
 	resp.Body.Close()
 
 	return &Plugin{
-		DB: db, Dock: dock, Signer: signer,
+		DB: db, Dock: dock, Signer: signer, Approvers: approvers,
 		Name: cfg.PluginName, Listen: cfg.Listen, Ver: cfg.Version,
 		startedAt: time.Now(),
 	}, nil
@@ -114,6 +123,11 @@ func (p *Plugin) RegisterRoutes(r gin.IRouter) {
 		w.POST("/finalize", p.handleFinalize)
 		w.POST("/yank", p.handleYank)
 		w.GET("/list", p.handleList)
+		// P2 promotion gate
+		w.POST("/stage-result", p.handleStageResult)
+		w.GET("/stage-run", p.handleStageRun)
+		w.POST("/stamp", p.handleStamp)
+		w.POST("/promote", p.handlePromote)
 	}
 }
 
