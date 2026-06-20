@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/lib/pq v1.10.9
-	github.com/networkextension/polar-sdk v0.13.0
+	github.com/networkextension/polar-sdk v0.13.1
 )
 
 require (
