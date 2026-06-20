@@ -87,6 +87,8 @@ chmod +x "$PKG/install.sh"
 
 VER_FULL="$SHA"
 OUT="${OUT:-/tmp/${SVC}-${VER_FULL}-${OS}-${ARCH}.tar.gz}"
-tar -C "$STAGE" -czf "$OUT" "${SVC}-pkg"
+# Tar the CONTENTS flat (install.sh at the archive root) — SelfInstall looks
+# for the entrypoint at the top of the unpacked version dir, not one level deep.
+tar -C "$PKG" -czf "$OUT" .
 echo "package-pkg: wrote $OUT"
 tar -tzf "$OUT"
