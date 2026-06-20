@@ -1,9 +1,9 @@
 // Command release-publish is the reference publisher: it cuts a release
 // in three hops, keeping the bytes off both dock and release —
 //
-//	1. POST /release/publish   → {asset_id, put_url}
-//	2. PUT the file → provider  (direct, only if not already present)
-//	3. POST /release/finalize  → the signed, registered release
+//  1. POST /release/publish   → {asset_id, put_url}
+//  2. PUT the file → provider  (direct, only if not already present)
+//  3. POST /release/finalize  → the signed, registered release
 //
 // Usage:
 //
@@ -39,6 +39,8 @@ func main() {
 		mime     = flag.String("mime", "application/octet-stream", "content-type")
 		minHost  = flag.String("min-host", "", "optional minimum host version")
 		notes    = flag.String("notes", "", "optional release notes")
+		format   = flag.String("format", "", "artifact format: binary (default) | tar.gz | tgz | zip")
+		entry    = flag.String("entrypoint", "", "script inside an archive to run after unpack (default install.sh)")
 	)
 	flag.Parse()
 	if *base == "" || *token == "" || *module == "" || *version == "" || *platform == "" || *file == "" {
@@ -97,6 +99,7 @@ func main() {
 		"module": *module, "version": *version, "channel": *channel, "platform": *platform,
 		"asset_id": grant.AssetID, "provider_id": grant.ProviderID,
 		"sha256": sha, "size_bytes": size, "min_host": *minHost, "notes": *notes,
+		"format": *format, "entrypoint": *entry,
 	}
 	var out map[string]any
 	doJSON("POST", *base+"/release/finalize", *token, finBody, &out)
