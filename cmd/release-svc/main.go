@@ -10,6 +10,7 @@
 //	POLAR_RELEASE_DB_DSN       postgres://…/polar_release?sslmode=disable
 //	POLAR_RELEASE_SIGNING_KEY  hex of 32-byte ed25519 seed (openssl rand -hex 32)
 //	POLAR_RELEASE_VERSION      cosmetic build tag
+//	POLAR_RELEASE_PUBLIC_BASE_URL  https://release.4950.store:2443 (portal origin; enables shared-sidebar nav)
 package main
 
 import (
@@ -42,8 +43,9 @@ func main() {
 		PluginToken: strings.TrimSpace(os.Getenv("POLAR_PLUGIN_TOKEN")),
 		Listen:      envOr("POLAR_RELEASE_LISTEN", "127.0.0.1:8101"),
 		Version:      envOr("POLAR_RELEASE_VERSION", "0.0.1"),
-		SigningSeed:  strings.TrimSpace(os.Getenv("POLAR_RELEASE_SIGNING_KEY")),
-		ApproverKeys: strings.TrimSpace(os.Getenv("POLAR_RELEASE_APPROVER_KEYS")),
+		SigningSeed:   strings.TrimSpace(os.Getenv("POLAR_RELEASE_SIGNING_KEY")),
+		ApproverKeys:  strings.TrimSpace(os.Getenv("POLAR_RELEASE_APPROVER_KEYS")),
+		PublicBaseURL: strings.TrimSpace(os.Getenv("POLAR_RELEASE_PUBLIC_BASE_URL")),
 	}
 	if cfg.PluginToken == "" {
 		log.Fatal("POLAR_PLUGIN_TOKEN unset — mint one for the 'release' plugin in dock /admin-plugins.html")
