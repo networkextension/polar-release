@@ -100,12 +100,32 @@ Install side (SDK): `SelfInstall(directive, destRoot)` verifies sha256 + (when
 env, and on exit 0 atomically repoints `<destRoot>/current` at it. The script
 is arbitrary code, so it runs **only after** verification, archive entries are
 path-traversal-checked, and operators SHOULD pin the release pubkey on any host
-that runs install scripts.
+that runs install scripts. `SelfApply(d, binPath, destRoot)` dispatches by
+`format` (binary→`SelfUpdate`, archive→`SelfInstall`) so a consumer adopts pkg
+with one call.
 
-> Note (pkg-over-OTA-through-dock): when an update is delivered via dock's
-> heartbeat directive, dock must run an SDK new enough to carry `format`/
-> `entrypoint` in the directive manifest, or a pkg's signature won't verify on
-> the consumer. Consumers that call `/release/resolve` directly are unaffected.
+### Tooling
+
+```bash
+# package any module into a release pkg (tar.gz + DESTDIR-aware, activation-gated install.sh)
+scripts/package-pkg.sh ~/github/Polar-/modules/polar-buildings darwin arm64
+# → /tmp/buildings-<sha>-darwin-arm64.tar.gz   (publish with release-publish -format tar.gz)
+
+# pull-install a module (no dock session; resolve is public). Pin the pubkey to enforce auth.
+POLAR_RELEASE_PUBKEY=<hex> DESTDIR=~/.local/polar/buildings \
+  polar-install -base https://release.example -module buildings \
+    -channel stable -platform darwin-arm64 -dest ~/.local/polar/buildings
+# add POLAR_PKG_ACTIVATE=1 to let the bundled install.sh (re)load the launchd job.
+```
+
+### pkg over OTA-through-dock
+
+Works with **no dock change**: dock's `resolvePluginUpdateViaRelease` forwards the
+resolve manifest **verbatim** (`Manifest json.RawMessage`), so `format`/`entrypoint`
+survive the heartbeat directive untouched. A self-updating plugin opts in by
+calling `sdk.SelfApply(res.Update, selfBinPath(), selfDestRoot())` instead of
+`SelfUpdate` — binary releases behave exactly as before; archive releases are
+unpacked + run their entrypoint. (polar-buildings is the reference adopter.)
 
 ## Deploy (macOS launchd)
 
