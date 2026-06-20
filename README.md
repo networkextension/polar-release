@@ -22,7 +22,7 @@ GET  /healthz
 GET  /release/pubkey                              # {algo, public_key_hex}  (public)
 GET  /release/resolve?module&channel&platform     # → version, sha256, ed25519_sig, manifest, dl_url  (public)
 POST /release/publish    {module,version,channel,platform,sha256,size_bytes,mime}   # → {asset_id, put_url}  (admin)
-POST /release/finalize   {…,asset_id,provider_id,min_host?,notes?}                  # → {release}            (admin)
+POST /release/finalize   {…,asset_id,provider_id,min_host?,notes?,format?,entrypoint?}  # → {release}        (admin)
 POST /release/yank       {module,version,channel,platform}                          # admin
 GET  /release/list?module[&channel&platform]                                        # admin
 ```
@@ -61,6 +61,51 @@ curl -s 'https://release.example/release/resolve?module=buildings&channel=stable
 
 The OTA self-update loop and the module marketplace become consumers of
 `/release/resolve` (they stop carrying the artifact URL themselves).
+
+## Artifact formats: binary vs pkg (archive + install script)
+
+The registry is payload-agnostic — it stores opaque bytes keyed by sha256 and
+signs the manifest, so the artifact can be a single binary **or** a package
+that bundles files plus an install script. The signature covers the whole
+file's sha256, so the script inside an archive is just as tamper-evident as a
+binary.
+
+The manifest carries two signed fields that tell the consumer how to install:
+
+| `format` | meaning | consumer |
+|---|---|---|
+| `` (empty) / `binary` | a single executable | SDK `SelfUpdate` — swap + restart |
+| `tar.gz` / `tgz` / `zip` | archive bundle; run `entrypoint` after unpack | SDK `SelfInstall` |
+
+`entrypoint` (default `install.sh`) is the path **inside** the archive to run.
+Both fields are part of the ed25519-signed canonical bytes — but only when
+non-empty, so a plain binary's signed bytes are unchanged from before these
+fields existed (old signatures keep verifying). An Apple `.pkg` is a distinct
+platform installer, not one of these bundles — ship "a pkg with an install
+script" as a `tar.gz`/`zip` containing `install.sh`.
+
+Publish a pkg (same three hops, just add `-format`):
+
+```bash
+release-publish -base https://release.example -token <admin> \
+  -module buildings -version 0.0.3 -channel dev \
+  -platform darwin-arm64 -format tar.gz -file ./buildings-bundle.tgz \
+  [-entrypoint install.sh]
+```
+
+Install side (SDK): `SelfInstall(directive, destRoot)` verifies sha256 + (when
+`POLAR_RELEASE_PUBKEY` is pinned) ed25519, unpacks into
+`<destRoot>/versions/<version>/`, runs the entrypoint there with
+`POLAR_MODULE/POLAR_VERSION/POLAR_PLATFORM/POLAR_NEW_DIR/POLAR_PREV_DIR` in the
+env, and on exit 0 atomically repoints `<destRoot>/current` at it. The script
+is arbitrary code, so it runs **only after** verification, archive entries are
+path-traversal-checked, and operators SHOULD pin the release pubkey on any host
+that runs install scripts.
+
+> Note (pkg-over-OTA-through-dock): when an update is delivered via dock's
+> heartbeat directive, dock must run an SDK new enough to carry `format`/
+> `entrypoint` in the directive manifest, or a pkg's signature won't verify on
+> the consumer. Consumers that call `/release/resolve` directly are unaffected.
 
 ## Deploy (macOS launchd)
 

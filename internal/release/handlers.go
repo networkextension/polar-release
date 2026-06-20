@@ -134,6 +134,35 @@ type finalizeRequest struct {
 	SizeBytes  int64  `json:"size_bytes"`
 	MinHost    string `json:"min_host"`
 	Notes      string `json:"notes"`
+	Format     string `json:"format"`     // "" / "binary" / "tar.gz" / "tgz" / "zip"
+	Entrypoint string `json:"entrypoint"` // script inside an archive (default install.sh)
+}
+
+// normalizeArtifactFormat canonicalizes a publisher-supplied format +
+// entrypoint into the (format, entrypoint, errMsg) the manifest stores.
+//   - "" / "binary"  → ("", "", "")  — the legacy byte-identical binary path
+//   - archive format → (format, entrypoint-or-"install.sh", "")
+//   - anything else  → ("", "", "<reason>")
+//
+// Keeping binary as "" (not "binary") means canonicalBytes for a plain
+// binary is unchanged from before this field existed. Archive formats are
+// the unpack-and-run-a-script bundles the SDK SelfInstall handles; an Apple
+// .pkg is a distinct platform installer and is intentionally not one of them
+// (ship a "pkg with an install script" as tar.gz/zip containing install.sh).
+func normalizeArtifactFormat(format, entrypoint string) (string, string, string) {
+	format = strings.ToLower(strings.TrimSpace(format))
+	entrypoint = strings.TrimSpace(entrypoint)
+	switch format {
+	case "", "binary":
+		return "", "", ""
+	case "tar.gz", "tgz", "zip":
+		if entrypoint == "" {
+			entrypoint = "install.sh"
+		}
+		return format, entrypoint, ""
+	default:
+		return "", "", "format must be one of: binary, tar.gz, tgz, zip"
+	}
 }
 
 func (p *Plugin) handleFinalize(c *gin.Context) {
@@ -163,6 +192,11 @@ func (p *Plugin) handleFinalize(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "valid sha256, asset_id, provider_id required"})
 		return
 	}
+	format, entrypoint, fmtErr := normalizeArtifactFormat(req.Format, req.Entrypoint)
+	if fmtErr != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmtErr})
+		return
+	}
 	// 1. confirm the bytes landed on the provider (idempotent).
 	if err := p.finalizeAsset(req.AssetID, req.ProviderID); err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "asset finalize failed: " + err.Error()})
@@ -173,6 +207,7 @@ func (p *Plugin) handleFinalize(c *gin.Context) {
 		Module: req.Module, Version: req.Version, Channel: req.Channel,
 		Platform: req.Platform, SHA256: req.SHA256, Size: req.SizeBytes,
 		MinHost: strings.TrimSpace(req.MinHost), Notes: strings.TrimSpace(req.Notes),
+		Format: format, Entrypoint: entrypoint,
 	}
 	rel := &Release{
 		Module: m.Module, Version: m.Version, Channel: m.Channel, Platform: m.Platform,
