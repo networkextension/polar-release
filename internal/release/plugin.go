@@ -17,6 +17,7 @@ import (
 	"log"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -33,6 +34,11 @@ type Config struct {
 	Version      string
 	SigningSeed  string // hex of ed25519 seed; empty → ephemeral + warn
 	ApproverKeys string // comma-sep hex ed25519 PUBLIC keys trusted to stamp promotions
+	// PublicBaseURL is this service's externally reachable origin, e.g.
+	// "https://release.4950.store:2443". Joined with the portal path to
+	// build the shared-sidebar link (heartbeat UIRoutes). Empty → the
+	// portal still serves locally but is left out of the platform nav.
+	PublicBaseURL string
 }
 
 // Plugin holds the running service state.
@@ -44,6 +50,7 @@ type Plugin struct {
 	Name      string
 	Listen    string
 	Ver       string
+	PublicURL string
 	startedAt time.Time
 }
 
@@ -102,6 +109,7 @@ func New(ctx context.Context, cfg Config) (*Plugin, error) {
 	return &Plugin{
 		DB: db, Dock: dock, Signer: signer, Approvers: approvers,
 		Name: cfg.PluginName, Listen: cfg.Listen, Ver: cfg.Version,
+		PublicURL: strings.TrimRight(cfg.PublicBaseURL, "/"),
 		startedAt: time.Now(),
 	}, nil
 }
@@ -110,6 +118,9 @@ func New(ctx context.Context, cfg Config) (*Plugin, error) {
 // behind the admin gate.
 func (p *Plugin) RegisterRoutes(r gin.IRouter) {
 	r.GET("/healthz", p.handleHealthz)
+
+	// self-contained admin portal (same-origin → /release/*, cookie auth)
+	r.GET("/", p.handleUI)
 
 	rel := r.Group("/release")
 	{
@@ -159,14 +170,27 @@ func (p *Plugin) heartbeatLoop(ctx context.Context) {
 }
 
 func (p *Plugin) beat() {
-	_, err := p.Dock.HeartbeatV2(sdk.HeartbeatOpts{
+	opts := sdk.HeartbeatOpts{
 		Version:       p.Ver,
 		Endpoint:      p.Listen,
 		UptimeSeconds: int64(time.Since(p.startedAt).Seconds()),
 		OS:            runtime.GOOS,
 		Arch:          runtime.GOARCH,
-	})
-	if err != nil {
+	}
+	// Advertise the portal into the shared platform sidebar. Requires a
+	// public origin to build the cross-subdomain link; without it dock
+	// leaves release out of /api/nav (the portal still serves locally).
+	if p.PublicURL != "" {
+		opts.PublicBaseURL = p.PublicURL
+		opts.UIRoutes = []sdk.UIRoute{{
+			Path:      "/",
+			Label:     "Release",
+			Icon:      "package",
+			AdminOnly: true,
+			Order:     90,
+		}}
+	}
+	if _, err := p.Dock.HeartbeatV2(opts); err != nil {
 		log.Printf("release: heartbeat failed: %v", err)
 	}
 }

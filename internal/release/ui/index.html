@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Polar Release</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #181b22; --panel2: #1f232c; --line: #2a2f3a;
+    --text: #e6e9ef; --muted: #97a0b0; --accent: #4f8cff; --accent2: #2c6cf6;
+    --ok: #3ecf8e; --warn: #f5a623; --bad: #ff5c6c; --chip: #262b35;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f5f7fa; --panel: #ffffff; --panel2: #f0f3f8; --line: #e2e7ee;
+      --text: #1a2230; --muted: #5d6b80; --accent: #2c6cf6; --accent2: #1e5bd6;
+      --chip: #eef2f8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 18px 20px 60px; }
+  header.top {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 18px;
+  }
+  header.top h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  header.top .sub { color: var(--muted); font-size: 12px; }
+  .spacer { flex: 1; }
+  .pubkey {
+    font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--chip); border: 1px solid var(--line); border-radius: 8px;
+    padding: 5px 9px; color: var(--muted); max-width: 280px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+  }
+  .pubkey:hover { color: var(--text); }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--muted); }
+  input, select {
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--text); padding: 8px 10px; font-size: 13px; min-width: 130px; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  button {
+    background: var(--accent2); border: 1px solid var(--accent2); color: #fff;
+    border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; font-weight: 550;
+  }
+  button:hover { background: var(--accent); }
+  button.ghost { background: transparent; color: var(--text); border-color: var(--line); font-weight: 500; }
+  button.ghost:hover { background: var(--panel2); }
+  button.danger { background: transparent; color: var(--bad); border-color: var(--line); }
+  button.danger:hover { background: rgba(255,92,108,.12); }
+  button:disabled { opacity: .5; cursor: default; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; }
+  tr.yanked td { opacity: .5; }
+  .mono { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .chip {
+    display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+    font-weight: 600; border: 1px solid transparent;
+  }
+  .ch-dev    { background: rgba(151,160,176,.18); color: var(--muted); }
+  .ch-stage  { background: rgba(79,140,255,.16); color: var(--accent); }
+  .ch-beta   { background: rgba(245,166,35,.16); color: var(--warn); }
+  .ch-stable { background: rgba(62,207,142,.16); color: var(--ok); }
+  .badge-yanked { background: rgba(255,92,108,.16); color: var(--bad); }
+  .sha { cursor: pointer; color: var(--muted); }
+  .sha:hover { color: var(--text); }
+  .actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+  .actions select { min-width: 84px; padding: 5px 7px; font-size: 12px; }
+  .actions button { padding: 5px 10px; font-size: 12px; }
+  .empty, .hint { color: var(--muted); font-size: 13px; padding: 10px 2px; }
+  .toast {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 16px; font-size: 13px; box-shadow: 0 6px 24px rgba(0,0,0,.3);
+    opacity: 0; pointer-events: none; transition: opacity .2s; max-width: 90vw;
+  }
+  .toast.show { opacity: 1; }
+  .toast.ok { border-color: var(--ok); } .toast.err { border-color: var(--bad); }
+  .authwarn {
+    background: rgba(245,166,35,.1); border: 1px solid var(--warn); color: var(--warn);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 13px; display: none;
+  }
+  .resolve-out { margin-top: 12px; font-size: 13px; display: none; }
+  .resolve-out .kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 12px; }
+  .resolve-out .kv span:first-child { color: var(--muted); }
+  .resolve-out .kv .mono { word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Polar Release</h1>
+      <div class="sub">签名发布登记 · 渠道晋级 · 撤回</div>
+    </div>
+    <div class="spacer"></div>
+    <div id="pubkey" class="pubkey" title="点击复制 ed25519 公钥">pubkey …</div>
+  </header>
+
+  <div id="authwarn" class="authwarn">
+    未检测到管理员会话 — 写操作（撤回/晋级）会被拒绝。请先在同一浏览器登录 dock 管理后台（owner/admin），cookie 会自动带过来。
+  </div>
+
+  <!-- ── Query ─────────────────────────────────── -->
+  <div class="card">
+    <h2>发布矩阵</h2>
+    <div class="row">
+      <div class="field">
+        <label>模块 (module) *</label>
+        <input id="qModule" list="moduleList" placeholder="如 buildings / dock / hosts" autocomplete="off" />
+        <datalist id="moduleList"></datalist>
+      </div>
+      <div class="field">
+        <label>渠道 (channel)</label>
+        <select id="qChannel">
+          <option value="">全部</option>
+          <option value="dev">dev</option>
+          <option value="stage">stage</option>
+          <option value="beta">beta</option>
+          <option value="stable">stable</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>平台 (platform)</label>
+        <input id="qPlatform" placeholder="如 darwin-arm64（可空）" autocomplete="off" />
+      </div>
+      <button id="queryBtn">查询</button>
+    </div>
+    <div id="listArea" style="margin-top:14px;">
+      <div class="hint">输入模块名后点「查询」。</div>
+    </div>
+  </div>
+
+  <!-- ── Resolve tester ─────────────────────────── -->
+  <div class="card">
+    <h2>解析校验 (resolve) — 客户端取版本/下载链接的入口</h2>
+    <div class="row">
+      <div class="field">
+        <label>模块 *</label>
+        <input id="rModule" placeholder="module" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label>渠道</label>
+        <select id="rChannel">
+          <option value="stable">stable</option>
+          <option value="beta">beta</option>
+          <option value="stage">stage</option>
+          <option value="dev">dev</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>平台 *</label>
+        <input id="rPlatform" placeholder="darwin-arm64" autocomplete="off" />
+      </div>
+      <button id="resolveBtn" class="ghost">解析</button>
+    </div>
+    <div id="resolveOut" class="resolve-out"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const CHANNELS = ["dev", "stage", "beta", "stable"];
+const COMMON_MODULES = ["dock","buildings","hosts","wg","expense","library","video","iosdist","projects","latch","event","film","screen","dns","stock","music","photo","lawyer","assets","release","zone"];
+
+const $ = (id) => document.getElementById(id);
+
+function toast(msg, kind) {
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "toast show " + (kind || "");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { el.className = "toast " + (kind || ""); }, 3200);
+}
+
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, Object.assign({ credentials: "same-origin", headers: { "Content-Type": "application/json" } }, opts || {}));
+  let data = {};
+  try { data = await res.json(); } catch (e) {}
+  return { res, data };
+}
+
+function fmtBytes(n) {
+  n = Number(n || 0);
+  if (!n) return "—";
+  const u = ["B","KB","MB","GB"];
+  let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? n : n.toFixed(1)) + " " + u[i];
+}
+
+function fmtTime(s) {
+  if (!s) return "—";
+  const d = new Date(s);
+  if (isNaN(d)) return s;
+  return d.toLocaleString();
+}
+
+function chRank(c) { const i = CHANNELS.indexOf(c); return i < 0 ? 99 : i; }
+
+function copy(text, label) {
+  navigator.clipboard.writeText(text).then(
+    () => toast((label || "已复制") + " ✓", "ok"),
+    () => toast("复制失败", "err"),
+  );
+}
+
+// ── pubkey ───────────────────────────────────────
+async function loadPubkey() {
+  const { res, data } = await api("/release/pubkey");
+  if (res.ok && data.public_key_hex) {
+    const k = data.public_key_hex;
+    $("pubkey").textContent = "ed25519 " + k.slice(0, 16) + "…";
+    $("pubkey").onclick = () => copy(k, "公钥已复制");
+  } else {
+    $("pubkey").textContent = "pubkey 不可用";
+  }
+}
+
+// ── auth probe (best-effort: list w/o module → 400 if authed, 401 if not) ──
+async function probeAuth() {
+  const { res } = await api("/release/list");
+  // 401 = no admin session; 400 = authed but missing module (expected). 403 = wrong role.
+  $("authwarn").style.display = (res.status === 401) ? "block" : "none";
+}
+
+// ── list ─────────────────────────────────────────
+let lastRows = [];
+async function doQuery() {
+  const module = $("qModule").value.trim();
+  if (!module) { toast("请填写模块名", "err"); return; }
+  const channel = $("qChannel").value;
+  const platform = $("qPlatform").value.trim();
+  rememberModule(module);
+  const qs = new URLSearchParams({ module });
+  if (channel) qs.set("channel", channel);
+  if (platform) qs.set("platform", platform);
+  $("listArea").innerHTML = '<div class="hint">查询中…</div>';
+  const { res, data } = await api("/release/list?" + qs.toString());
+  if (res.status === 401) { $("authwarn").style.display = "block"; $("listArea").innerHTML = '<div class="empty">需要管理员会话。</div>'; return; }
+  if (!res.ok) { $("listArea").innerHTML = '<div class="empty">查询失败：' + esc(data.error || res.status) + '</div>'; return; }
+  lastRows = (data.releases || []).slice();
+  renderList(lastRows);
+}
+
+function renderList(rows) {
+  if (!rows.length) { $("listArea").innerHTML = '<div class="empty">无发布记录。</div>'; return; }
+  rows.sort((a, b) => (a.version === b.version ? chRank(a.channel) - chRank(b.channel) : 0) || (new Date(b.published_at) - new Date(a.published_at)));
+  const body = rows.map((r, i) => {
+    const yanked = !!r.yanked_at;
+    const promoteOpts = CHANNELS.filter((c) => c !== r.channel && c !== "dev")
+      .map((c) => '<option value="' + c + '">→ ' + c + '</option>').join("");
+    return '<tr class="' + (yanked ? "yanked" : "") + '">' +
+      '<td class="mono">' + esc(r.version) + '</td>' +
+      '<td><span class="chip ch-' + esc(r.channel) + '">' + esc(r.channel) + '</span></td>' +
+      '<td class="mono">' + esc(r.platform) + '</td>' +
+      '<td>' + fmtBytes(r.manifest && r.manifest.size) + '</td>' +
+      '<td class="sha mono" title="点击复制完整 sha256\n' + esc(r.sha256) + '" data-sha="' + esc(r.sha256) + '">' + esc((r.sha256 || "").slice(0, 12)) + '…</td>' +
+      '<td>' + esc(fmtTime(r.published_at)) + '</td>' +
+      '<td>' + (yanked ? '<span class="chip badge-yanked">yanked</span>' : '<span class="chip ch-stable">live</span>') + '</td>' +
+      '<td class="actions">' +
+        (promoteOpts ? '<select data-i="' + i + '" class="promoteSel"><option value="">晋级…</option>' + promoteOpts + '</select>' +
+          '<button class="ghost promoteBtn" data-i="' + i + '">Go</button>' : '') +
+        (yanked ? '' : '<button class="danger yankBtn" data-i="' + i + '">撤回</button>') +
+      '</td></tr>';
+  }).join("");
+  $("listArea").innerHTML =
+    '<table><thead><tr><th>版本</th><th>渠道</th><th>平台</th><th>大小</th><th>SHA256</th><th>发布时间</th><th>状态</th><th></th></tr></thead><tbody>' +
+    body + '</tbody></table>';
+
+  $("listArea").querySelectorAll(".sha").forEach((el) =>
+    el.addEventListener("click", () => copy(el.dataset.sha, "sha256 已复制")));
+  $("listArea").querySelectorAll(".yankBtn").forEach((el) =>
+    el.addEventListener("click", () => doYank(lastRows[+el.dataset.i])));
+  $("listArea").querySelectorAll(".promoteBtn").forEach((el) =>
+    el.addEventListener("click", () => {
+      const sel = $("listArea").querySelector('.promoteSel[data-i="' + el.dataset.i + '"]');
+      const to = sel && sel.value;
+      if (!to) { toast("先选目标渠道", "err"); return; }
+      doPromote(lastRows[+el.dataset.i], to);
+    }));
+}
+
+// ── yank ─────────────────────────────────────────
+async function doYank(r) {
+  if (!r) return;
+  if (!confirm('撤回 ' + r.module + ' ' + r.version + ' @ ' + r.channel + '/' + r.platform + ' ?\n（软撤回：客户端 resolve 将不再返回此版本）')) return;
+  const { res, data } = await api("/release/yank", {
+    method: "POST",
+    body: JSON.stringify({ module: r.module, version: r.version, channel: r.channel, platform: r.platform }),
+  });
+  if (res.ok) { toast("已撤回 (" + (data.yanked || 1) + ")", "ok"); doQuery(); }
+  else toast("撤回失败：" + (data.error || res.status), "err");
+}
+
+// ── promote ──────────────────────────────────────
+async function doPromote(r, to) {
+  if (!r) return;
+  const { res, data } = await api("/release/promote", {
+    method: "POST",
+    body: JSON.stringify({ module: r.module, version: r.version, platform: r.platform, from: r.channel, to: to }),
+  });
+  if (res.ok) { toast("已晋级 " + r.channel + " → " + to, "ok"); doQuery(); }
+  else if (res.status === 403) toast("被拦截：" + to + " 需要 stage 测试 + 签名 stamp（CLI: release-publish stamp）", "err");
+  else toast("晋级失败：" + (data.error || res.status), "err");
+}
+
+// ── resolve ──────────────────────────────────────
+async function doResolve() {
+  const module = $("rModule").value.trim();
+  const platform = $("rPlatform").value.trim();
+  const channel = $("rChannel").value;
+  if (!module || !platform) { toast("module + platform 必填", "err"); return; }
+  const qs = new URLSearchParams({ module, channel, platform });
+  const { res, data } = await api("/release/resolve?" + qs.toString());
+  const out = $("resolveOut");
+  out.style.display = "block";
+  if (!res.ok) { out.innerHTML = '<div class="empty">' + esc(data.error || ("HTTP " + res.status)) + '</div>'; return; }
+  out.innerHTML = '<div class="kv">' +
+    '<span>版本</span><span class="mono">' + esc(data.version) + '</span>' +
+    '<span>渠道</span><span><span class="chip ch-' + esc(data.channel) + '">' + esc(data.channel) + '</span></span>' +
+    '<span>大小</span><span>' + fmtBytes(data.size) + '</span>' +
+    '<span>sha256</span><span class="mono">' + esc(data.sha256) + '</span>' +
+    '<span>ed25519_sig</span><span class="mono">' + esc((data.ed25519_sig || "").slice(0, 32)) + '…</span>' +
+    '<span>下载</span><span><a href="' + esc(data.dl_url) + '" target="_blank" rel="noopener">短时签名链接 ↗</a></span>' +
+    '</div>';
+}
+
+// ── module memory ────────────────────────────────
+function recentModules() {
+  try { return JSON.parse(localStorage.getItem("release.modules") || "[]"); } catch (e) { return []; }
+}
+function rememberModule(m) {
+  let list = recentModules().filter((x) => x !== m);
+  list.unshift(m);
+  list = list.slice(0, 12);
+  localStorage.setItem("release.modules", JSON.stringify(list));
+  fillModuleList();
+}
+function fillModuleList() {
+  const set = [];
+  recentModules().concat(COMMON_MODULES).forEach((m) => { if (m && set.indexOf(m) < 0) set.push(m); });
+  $("moduleList").innerHTML = set.map((m) => '<option value="' + esc(m) + '">').join("");
+}
+
+// ── wire ─────────────────────────────────────────
+$("queryBtn").addEventListener("click", doQuery);
+$("qModule").addEventListener("keydown", (e) => { if (e.key === "Enter") doQuery(); });
+$("resolveBtn").addEventListener("click", doResolve);
+fillModuleList();
+loadPubkey();
+probeAuth();
+</script>
+</body>
+</html>
